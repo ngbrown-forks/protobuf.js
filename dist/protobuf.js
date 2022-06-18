@@ -1,6 +1,6 @@
 /*!
- * protobuf.js v6.10.0 (c) 2016, daniel wirtz
- * compiled wed, 15 jul 2020 23:34:13 utc
+ * protobuf.js v6.10.2 (c) 2016, daniel wirtz
+ * compiled sat, 18 jun 2022 01:20:56 utc
  * licensed under the bsd-3-clause license
  * see: https://github.com/dcodeio/protobuf.js for details
  */
@@ -1583,7 +1583,7 @@ function genValuePartial_fromObject(gen, field, fieldIndex, prop) {
             case "bytes": gen
                 ("if(typeof d%s===\"string\")", prop)
                     ("util.base64.decode(d%s,m%s=util.newBuffer(util.base64.length(d%s)),0)", prop, prop, prop)
-                ("else if(d%s.length)", prop)
+                ("else if(d%s.length >= 0)", prop)
                     ("m%s=d%s", prop, prop);
                 break;
             case "string": gen
@@ -1711,7 +1711,7 @@ converter.toObject = function toObject(mtype) {
     /* eslint-disable no-unexpected-multiline, block-scoped-var, no-redeclare */
     var fields = mtype.fieldsArray.slice().sort(util.compareFieldsById);
     if (!fields.length)
-        return util.codegen()("return {}");
+        return util.codegen(["_m", "_o"])("return {}");
     var gen = util.codegen(["m", "o"], mtype.name + "$toObject")
     ("if(!o)")
         ("o={}")
@@ -1881,7 +1881,8 @@ function decoder(mtype) {
             if (types.long[field.keyType] !== undefined) gen
                 ("%s[typeof k===\"object\"?util.longToHash(k):k]=value", ref);
             else gen
-                ("%s[k]=value", ref);
+                ("if (value != null)")
+                    ("%s[k]=value", ref);
 
         // Repeated fields
         } else if (field.repeated) { gen
@@ -1926,7 +1927,7 @@ function decoder(mtype) {
         var rfield = mtype._fieldsArray[i];
         if (rfield.required) gen
     ("if(!m.hasOwnProperty(%j))", rfield.name)
-        ("throw util.ProtocolError(%j,{instance:m})", missing(rfield));
+        ("throw new util.ProtocolError(%j,{instance:m})", missing(rfield));
     }
 
     return gen
@@ -1963,15 +1964,15 @@ function genTypePartial(gen, field, fieldIndex, ref) {
  * @returns {Codegen} Codegen instance
  */
 function encoder(mtype) {
+    // "when a message is serialized its known fields should be written sequentially by field number"
+    var fields = /* initializes */ mtype.fieldsArray.slice().sort(util.compareFieldsById);
+
     /* eslint-disable no-unexpected-multiline, block-scoped-var, no-redeclare */
-    var gen = util.codegen(["m", "w"], mtype.name + "$encode")
+    var gen = util.codegen([fields.length ? "m" : "_m", "w"], mtype.name + "$encode")
     ("if(!w)")
         ("w=Writer.create()");
 
     var i, ref;
-
-    // "when a message is serialized its known fields should be written sequentially by field number"
-    var fields = /* initializes */ mtype.fieldsArray.slice().sort(util.compareFieldsById);
 
     for (var i = 0; i < fields.length; ++i) {
         var field    = fields[i].resolve(),
@@ -3041,8 +3042,9 @@ var util = require(37);
  * @param {boolean|Object.<string,*>} [responseStream] Whether the response is streamed
  * @param {Object.<string,*>} [options] Declared options
  * @param {string} [comment] The comment for this method
+ * @param {Object.<string,*>} [parsedOptions] Declared options, properly parsed into an object
  */
-function Method(name, type, requestType, responseType, requestStream, responseStream, options, comment) {
+function Method(name, type, requestType, responseType, requestStream, responseStream, options, comment, parsedOptions) {
 
     /* istanbul ignore next */
     if (util.isObject(requestStream)) {
@@ -3114,6 +3116,11 @@ function Method(name, type, requestType, responseType, requestStream, responseSt
      * @type {string|null}
      */
     this.comment = comment;
+
+    /**
+     * Options properly parsed into an object
+     */
+    this.parsedOptions = parsedOptions;
 }
 
 /**
@@ -3125,6 +3132,8 @@ function Method(name, type, requestType, responseType, requestStream, responseSt
  * @property {boolean} [requestStream=false] Whether requests are streamed
  * @property {boolean} [responseStream=false] Whether responses are streamed
  * @property {Object.<string,*>} [options] Method options
+ * @property {string} comment Method comments
+ * @property {Object.<string,*>} [parsedOptions] Method options properly parsed into an object
  */
 
 /**
@@ -3135,7 +3144,7 @@ function Method(name, type, requestType, responseType, requestStream, responseSt
  * @throws {TypeError} If arguments are invalid
  */
 Method.fromJSON = function fromJSON(name, json) {
-    return new Method(name, json.type, json.requestType, json.responseType, json.requestStream, json.responseStream, json.options, json.comment);
+    return new Method(name, json.type, json.requestType, json.responseType, json.requestStream, json.responseStream, json.options, json.comment, json.parsedOptions);
 };
 
 /**
@@ -3152,7 +3161,8 @@ Method.prototype.toJSON = function toJSON(toJSONOptions) {
         "responseType"   , this.responseType,
         "responseStream" , this.responseStream,
         "options"        , this.options,
-        "comment"        , keepComments ? this.comment : undefined
+        "comment"        , keepComments ? this.comment : undefined,
+        "parsedOptions"  , this.parsedOptions,
     ]);
 };
 
