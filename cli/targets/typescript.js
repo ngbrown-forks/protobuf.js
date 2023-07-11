@@ -30,7 +30,7 @@ function typescript(root, options, callback) {
         aliases.push("util");
         if (aliases.length) {
             push("/* eslint-disable */");
-            push("import * as $protobuf from \"protobufjs/minimal\"");
+            push("import $protobuf from \"protobufjs/minimal.js\"");
             push("import Long from \"long\";");
             if (config.comments)
                 push("// Common aliases");
@@ -691,8 +691,10 @@ function buildType(ref, type) {
                 + ") : " + field.typeDefault.toNumber(field.type.charAt(0) === "u") + ";");
         else if (field.bytes) {
             push(escapeName(type.name) + ".prototype" + prop + " = $util.newBuffer(" + JSON.stringify(Array.prototype.slice.call(field.typeDefault)) + ");");
-        } else
+        } else {
+            // TODO: Currently assignes null to required fields
             push(escapeName(type.name) + ".prototype" + prop + " = " + JSON.stringify(field.typeDefault) + ";");
+        }
     });
 }
 
