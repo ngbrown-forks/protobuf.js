@@ -691,8 +691,10 @@ function buildType(ref, type) {
                 + ") : " + field.typeDefault.toNumber(field.type.charAt(0) === "u") + ";");
         else if (field.bytes) {
             push(escapeName(type.name) + ".prototype" + prop + " = $util.newBuffer(" + JSON.stringify(Array.prototype.slice.call(field.typeDefault)) + ");");
-        } else {
+        } else if (field.required) {
             // TODO: Currently assignes null to required fields
+            push(escapeName(type.name) + ".prototype" + prop + " = " + JSON.stringify(field.typeDefault) + "!;");
+        } else {
             push(escapeName(type.name) + ".prototype" + prop + " = " + JSON.stringify(field.typeDefault) + ";");
         }
     });
