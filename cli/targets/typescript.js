@@ -110,33 +110,42 @@ function buildNamespace(ref, ns) {
     if (!ns)
         return;
 
-    if (ns instanceof Type)
-        buildType(ref, ns);
-    else if (ns instanceof Service)
-        buildService(undefined, ns);
-
-    if (ns.nestedArray.length > 0 && ns.name !== "") {
-        push("");
-        pushComment([
-            ns.comment || "Namespace " + ns.name + ".",
-            ns.parent instanceof protobuf.Root ? "@exports " + escapeName(ns.name) : "@memberof " + exportName(ns.parent),
-            "@namespace"
-        ]);
-        push("export namespace " + escapeName(ns.name) + " {");
-        ++indent;
+    if (ns.name !== ""
+        && (ns.nestedArray.some(function(n) { return (n instanceof Type); })
+            || ns.nestedArray.some(function (n) { return (n instanceof Service); })
+            || ns.nestedArray.some(function(n) { return (n instanceof Enum); }) )) {
+        var exportNs = exportName(ns);
+        if (exportNs !== "$root") {
+            push("");
+            pushComment([
+                ns.comment || "Namespace " + exportNs + ".",
+                ns.parent instanceof protobuf.Root || exportName(ns.parent) === "$root" ? "@exports " + escapeName(ns.name) : "@memberof " + exportName(ns.parent),
+                "@namespace"
+            ]);
+            push("export namespace " + exportNs + " {");
+            ++indent;
+        }
     }
 
     ns.nestedArray.forEach(function(nested) {
-        if (nested instanceof Enum)
+        if (nested instanceof Type)
+            buildType(ns.name, nested);
+        else if (nested instanceof Service)
+            buildService(ns.name, nested);
+        else if (nested instanceof Enum)
             buildEnum(ns.name, nested);
-        else if (nested instanceof Namespace)
-            buildNamespace(ns.name, nested);
     });
 
-    if (ns.nestedArray.length > 0 && ns.name !== "") {
+    while (indent > 0) {
         --indent;
         push("}");
     }
+
+    ns.nestedArray.forEach(function(nested) {
+        if (nested instanceof Namespace) {
+            buildNamespace(ns.name, nested);
+        }
+    });
 }
 
 var reduceableBlockStatements = {
@@ -450,7 +459,7 @@ function buildType(ref, type) {
     push("");
     pushComment([
         "Constructs a new " + type.name + ".",
-        type.parent instanceof protobuf.Root ? "@exports " + escapeName(type.name) : "@memberof " + exportName(type.parent),
+        type.parent instanceof protobuf.Root || exportName(type.parent) === "$root" ? "@exports " + escapeName(type.name) : "@memberof " + exportName(type.parent),
         "@classdesc " + (type.comment || "Represents " + aOrAn(type.name) + "."),
         config.comments ? "@implements " + escapeName("I" + type.name) : null,
         "@constructor",
@@ -729,7 +738,7 @@ function buildService(ref, service) {
     push("");
     pushComment([
         "Constructs a new " + service.name + " service.",
-        service.parent instanceof protobuf.Root ? "@exports " + escapeName(service.name) : "@memberof " + exportName(service.parent),
+        service.parent instanceof protobuf.Root || exportName(service.parent) === "$root" ? "@exports " + escapeName(service.name) : "@memberof " + exportName(service.parent),
         "@classdesc " + (service.comment || "Represents " + aOrAn(service.name)),
         "@extends $protobuf.rpc.Service",
         "@constructor",
@@ -805,7 +814,7 @@ function buildEnum(ref, enm) {
     push("");
     var comment = [
         enm.comment || enm.name + " enum.",
-        enm.parent instanceof protobuf.Root ? "@exports " + escapeName(enm.name) : "@name " + exportName(enm),
+        enm.parent instanceof protobuf.Root || exportName(enm.parent) === "$root" ? "@exports " + escapeName(enm.name) : "@name " + exportName(enm),
         config.forceEnumString ? "@enum {string}" : "@enum {number}",
     ];
     Object.keys(enm.values).forEach(function(key) {
