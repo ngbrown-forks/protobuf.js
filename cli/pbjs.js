@@ -40,7 +40,7 @@ exports.main = function main(args, callback) {
             "force-long": "strict-long",
             "force-message": "strict-message"
         },
-        string: [ "target", "out", "path", "wrap", "dependency", "root", "lint" ],
+        string: [ "target", "out", "path", "wrap", "dependency", "root", "lint", "root-module" ],
         boolean: [ "create", "encode", "decode", "verify", "convert", "delimited", "beautify", "comments", "es6", "sparse", "keep-case", "force-long", "force-number", "force-enum-string", "force-message" ],
         default: {
             target: "json",
@@ -58,7 +58,7 @@ exports.main = function main(args, callback) {
             "force-long": false,
             "force-number": false,
             "force-enum-string": false,
-            "force-message": false
+            "force-message": false,
         }
     });
 
@@ -137,6 +137,10 @@ exports.main = function main(args, callback) {
                 "  --force-number   Enforces the use of 'number' for s-/u-/int64 and s-/fixed64 fields.",
                 "  --force-message  Enforces the use of message instances instead of plain objects.",
                 "",
+                chalk.bold.gray("  Typescript targets only:"),
+                "",
+                "  --root-module   Module name hoisted to root of output file instead of being nested under a namespace.",
+                "",
                 "usage: " + chalk.bold.green("pbjs") + " [options] file1.proto file2.json ..." + chalk.gray("  (or pipe)  ") + "other | " + chalk.bold.green("pbjs") + " [options] -",
                 ""
             ].join("\n"));
@@ -159,6 +163,39 @@ exports.main = function main(args, callback) {
     // Require custom target
     if (!target)
         target = require(path.resolve(process.cwd(), argv.target));
+
+    if (argv.target === "typescript" && typeof argv["root-module"] === "string") {
+        var removeParts = ("." + argv["root-module"]).split(".");
+
+        function cleanup(fullName) {
+            var parts = fullName.split(".");
+            if (removeParts.length > parts.length) {
+                return fullName;
+            }
+
+            var i = 0;
+            for (; i < removeParts.length; i++) {
+                if (parts[i] !== removeParts[i]) {
+                    return fullName;
+                }
+            }
+            var path = [""];
+            for (; i < parts.length; i++) {
+                path.push(parts[i]);
+            }
+            return path.join(".");
+        }
+
+        var originalGetFullName = Object.getOwnPropertyDescriptor(protobuf.ReflectionObject.prototype, "fullName");
+        Object.defineProperty(protobuf.ReflectionObject.prototype, "fullName", {
+            get: function() {
+                var fullName = originalGetFullName.get.call(this);
+                var newFullName = cleanup(fullName);
+                //console.log(`${fullName} -> ${newFullName}`)
+                return newFullName;
+            }
+        })
+    }
 
     var root = new protobuf.Root();
 

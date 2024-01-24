@@ -98,7 +98,8 @@ Object.defineProperties(ReflectionObject.prototype, {
                 ptr = ptr.parent;
             }
             return path.join(".");
-        }
+        },
+        configurable: true,
     }
 });
 
